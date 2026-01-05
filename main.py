@@ -52,12 +52,12 @@ def scarica_tornei():
         "ambito": None,
         "categoria_eta": None,
         "classifica": None,
-        "data_fine": "31/03/2026",     # formato gg/mm/aaaa (funziona)
+        "data_fine": "31/03/2026",
         "data_inizio": "10/01/2026",
         "fetchrows": 500,
         "id_area_regionale": None,
         "id_classifica": None,
-        "id_disciplina": 4332,  # Tennis
+        "id_disciplina": 4332,
         "massimale_montepremi": None,
         "rowstoskip": 0,
         "sesso": None,
@@ -108,6 +108,7 @@ def filtra_tornei(tornei):
 
     return validi
 
+
 # ---------------------------------------------------------
 # LOOP PRINCIPALE
 # ---------------------------------------------------------
@@ -125,6 +126,19 @@ def main():
             print(f"Tornei totali ricevuti: {len(tornei)}")
 
             validi = filtra_tornei(tornei)
+
+            # --- SIMULAZIONE SINGOLA ---
+            # Aggiunge un torneo fasullo SOLO al primo ciclo dopo il deploy
+            if not tornei_precedenti:
+                validi.append({
+                    "nome_torneo": "TEST TORNEO SIMULATO",
+                    "citta": "Milano",
+                    "sigla_provincia": "MI",
+                    "tipo_torneo": "Test",
+                    "id_settore": 0,
+                    "id_fonte": 0
+                })
+                print(">>> TORNEO SIMULATO AGGIUNTO PER TEST <<<")
 
             # Stampa forense
             print("\n--- TORNEI VALIDI DOPO FILTRO ---")
