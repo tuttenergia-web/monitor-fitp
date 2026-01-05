@@ -2,7 +2,6 @@ import threading
 import main
 from flask import Flask
 
-# Mini server web per Render (porta finta)
 app = Flask(__name__)
 
 @app.route("/")
@@ -10,13 +9,13 @@ def home():
     return "Monitor FITP attivo"
 
 def start_monitor():
+    print(">>> AVVIO THREAD MONITOR FITP <<<")
     main.main()
 
-if __name__ == "__main__":
-    # Avvia il monitor FITP in un thread separato
-    t = threading.Thread(target=start_monitor)
-    t.daemon = True
-    t.start()
+# Avvio immediato del monitor PRIMA del server Flask
+monitor_thread = threading.Thread(target=start_monitor)
+monitor_thread.daemon = False   # NON daemon → Render non lo uccide
+monitor_thread.start()
 
-    # Avvia il server web (porta obbligatoria per Render)
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
