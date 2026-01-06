@@ -15,7 +15,7 @@ CHAT_ID = "6701954823"
 BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 
 PROVINCIA = "MI"     # filtro provincia
-INTERVALLO = 90      # secondi tra un controllo e l'altro
+INTERVALLO = 30      # secondi tra un controllo e l'altro
 
 # Stato precedente per rilevare modifiche
 tornei_precedenti = []
