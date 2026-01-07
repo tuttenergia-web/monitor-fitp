@@ -3,7 +3,6 @@ print(">>> STO ESEGUENDO monitor_tornei_fitp_copia.py <<<")
 import os
 print("FILE IN ESECUZIONE:", os.path.abspath(__file__))
 import time
-import json
 import requests
 
 # ---------------------------------------------------------
@@ -15,37 +14,11 @@ API_URL = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc
 CHAT_ID = "6701954823"
 BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 
-PROVINCIA = "MI"
-INTERVALLO = 30
-
-# File di memoria persistente
-MEMORIA_FILE = "tornei_memoria.json"
+PROVINCIA = "MI"     # filtro provincia
+INTERVALLO = 30      # secondi tra un controllo e l'altro
 
 # Stato precedente per rilevare modifiche
 tornei_precedenti = []
-
-
-# ---------------------------------------------------------
-# MEMORIA PERSISTENTE
-# ---------------------------------------------------------
-
-def carica_memoria():
-    if not os.path.exists(MEMORIA_FILE):
-        return []
-
-    try:
-        with open(MEMORIA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
-
-
-def salva_memoria(memoria):
-    try:
-        with open(MEMORIA_FILE, "w", encoding="utf-8") as f:
-            json.dump(memoria, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print("Errore salvataggio memoria:", e)
 
 
 # ---------------------------------------------------------
@@ -106,26 +79,33 @@ def filtra_tornei(tornei):
     validi = []
 
     for t in tornei:
+
         nome_torneo = t["nome_torneo"]
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
+        # DEBUG: stampa tutto ciò che arriva dall’API
         print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
+        # 1) Filtro LOMB robusto
         if not nome_torneo.upper().startswith("LOMB"):
             continue
 
         print("PASSA LOMB:", nome_torneo)
 
+        # 2) Filtro provincia MI
         if provincia != "MI":
             print("SCARTO (non MI):", nome_torneo)
             continue
 
         print("PASSA MI:", nome_torneo)
 
+        # Aggiungi ai validi
         validi.append(t)
         print("AGGIUNTO:", nome_torneo)
 
+    # Stampa finale
     print(">>> NUMERO TORNEI VALIDATI:", len(validi))
+
     return validi
 
 
@@ -138,9 +118,6 @@ def main():
 
     print("Avvio monitor tornei FITP (API mode)...")
 
-    # Carica memoria persistente
-    memoria = carica_memoria()
-
     while True:
         try:
             print("\nScarico tornei...")
@@ -151,7 +128,8 @@ def main():
             validi = filtra_tornei(tornei)
 
             # --- SIMULAZIONE SINGOLA ---
-            if not tornei_precedenti and not memoria:
+            # Aggiunge un torneo fasullo SOLO al primo ciclo dopo il deploy
+            if not tornei_precedenti:
                 validi.append({
                     "nome_torneo": "TEST TORNEO SIMULATO",
                     "citta": "Milano",
@@ -173,30 +151,22 @@ def main():
                 )
             print("------------------------------\n")
 
-            # --- MEMORIA PERSISTENTE ---
-            # Aggiunge solo i nuovi tornei mai visti
-            nuovi = 0
-            for t in validi:
-                chiave = (t["nome_torneo"], t["citta"], t["sigla_provincia"])
-                if chiave not in memoria:
-                    memoria.append(chiave)
-                    nuovi += 1
-
-            if nuovi > 0:
-                print(f"📌 Aggiunti {nuovi} nuovi tornei alla memoria persistente.")
-                salva_memoria(memoria)
-
             # --- CONFRONTO FORENSE ---
-            if memoria != tornei_precedenti:
+            snapshot = [
+                (t["nome_torneo"], t["citta"], t["sigla_provincia"])
+                for t in validi
+            ]
+
+            if snapshot != tornei_precedenti:
                 print("⚠️ Modifiche rilevate, invio notifica...")
 
                 msg = "🎾 *Aggiornamento tornei Milano (10 gen → 31 mar, no TPRA):*\n\n"
-                for nome, citta, prov in memoria:
-                    msg += f"- {nome} ({citta} - {prov})\n"
+                for t in validi:
+                    msg += f"- {t['nome_torneo']} ({t['citta']} - {t['sigla_provincia']})\n"
 
                 invia_telegram(msg)
 
-                tornei_precedenti = memoria.copy()
+                tornei_precedenti = snapshot.copy()
             else:
                 print("Nessuna modifica rispetto all'ultimo controllo.")
 
