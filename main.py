@@ -1,4 +1,4 @@
-print(">>> STO ESEGUENDO monitor_tornei_fitp_copia.py <<<")
+print(">>> STO ESEGUENDO monitor_tornei_fitp_ibrido.py <<<")
 
 import os
 print("FILE IN ESECUZIONE:", os.path.abspath(__file__))
@@ -16,47 +16,73 @@ CHAT_ID = "6701954823"
 BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 
 PROVINCIA = "MI"
-INTERVALLO = 30
+INTERVALLO = 30  # secondi tra un ciclo e l'altro
 
-# File di memoria persistente
-MEMORIA_FILE = "tornei_memoria.json"
-
-# Stato precedente per rilevare modifiche
-tornei_precedenti = []
+MEMORIA_FILE = "tornei_memoria.json"  # memoria cumulativa
+STATO_FILE = "tornei_stato_precedente.json"  # fotografia filtrata precedente
 
 
 # ---------------------------------------------------------
-# MEMORIA PERSISTENTE
+# MEMORIA CUMULATIVA (SET DI CHIAVI)
 # ---------------------------------------------------------
 
 def carica_memoria():
     if not os.path.exists(MEMORIA_FILE):
-        return []
-
+        return set()
     try:
         with open(MEMORIA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
+            data = json.load(f)
+        return set(data)
+    except Exception as e:
+        print("Errore lettura memoria:", e)
+        return set()
 
 
-def salva_memoria(memoria):
+def salva_memoria(memoria_set):
     try:
         with open(MEMORIA_FILE, "w", encoding="utf-8") as f:
-            json.dump(memoria, f, ensure_ascii=False, indent=2)
+            json.dump(list(memoria_set), f, ensure_ascii=False, indent=2)
     except Exception as e:
         print("Errore salvataggio memoria:", e)
 
 
 # ---------------------------------------------------------
-# INVIO TELEGRAM
+# STATO PRECEDENTE (FOTOGRAFIA FILTRATA)
+# ---------------------------------------------------------
+
+def carica_stato_precedente():
+    if not os.path.exists(STATO_FILE):
+        return set()
+    try:
+        with open(STATO_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return set(data)
+    except Exception as e:
+        print("Errore lettura stato precedente:", e)
+        return set()
+
+
+def salva_stato_precedente(stato_set):
+    try:
+        with open(STATO_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(stato_set), f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("Errore salvataggio stato precedente:", e)
+
+
+# ---------------------------------------------------------
+# TELEGRAM
 # ---------------------------------------------------------
 
 def invia_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": msg}
-        r = requests.post(url, json=payload)
+        payload = {
+            "chat_id": CHAT_ID,
+            "text": msg,
+            "parse_mode": "Markdown"
+        }
+        r = requests.post(url, json=payload, timeout=20)
         print(f"Telegram status: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
@@ -65,7 +91,7 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# CHIAMATA API FITP
+# CHIAMATA API (UNA SOLA)
 # ---------------------------------------------------------
 
 def scarica_tornei():
@@ -93,9 +119,13 @@ def scarica_tornei():
         "tipo_competizione": None
     }
 
-    r = requests.post(API_URL, json=payload)
+    print("Chiamata API unica (fetchrows=500)...")
+    r = requests.post(API_URL, json=payload, timeout=20)
     r.raise_for_status()
-    return r.json()["competizioni"]
+    data = r.json()
+    competizioni = data.get("competizioni", [])
+    print(f"Tornei totali ricevuti: {len(competizioni)}")
+    return competizioni
 
 
 # ---------------------------------------------------------
@@ -106,27 +136,47 @@ def filtra_tornei(tornei):
     validi = []
 
     for t in tornei:
-        nome_torneo = t["nome_torneo"]
+        nome_torneo = t.get("nome_torneo", "")
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
+        # Debug forense
         print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
+        # Solo tornei LOMB.
         if not nome_torneo.upper().startswith("LOMB"):
             continue
 
-        print("PASSA LOMB:", nome_torneo)
-
-        if provincia != "MI":
-            print("SCARTO (non MI):", nome_torneo)
+        # Solo provincia MI
+        if provincia != PROVINCIA:
             continue
 
-        print("PASSA MI:", nome_torneo)
-
         validi.append(t)
-        print("AGGIUNTO:", nome_torneo)
 
     print(">>> NUMERO TORNEI VALIDATI:", len(validi))
     return validi
+
+
+# ---------------------------------------------------------
+# CHIAVE STABILE (PER ORA COMPOSITA)
+# ---------------------------------------------------------
+
+def chiave_torneo(t):
+    """
+    Chiave stabile per identificare un torneo.
+    Per ora: nome + citta + provincia.
+    Se in futuro troviamo un ID univoco nel JSON, lo sostituiamo qui.
+    """
+    nome = (t.get("nome_torneo") or "").strip()
+    citta = (t.get("citta") or "").strip()
+    prov = (t.get("sigla_provincia") or "").strip().upper()
+    return f"{nome}|{citta}|{prov}"
+
+
+def format_linea(t):
+    nome = (t.get("nome_torneo") or "").strip()
+    citta = (t.get("citta") or "").strip()
+    prov = (t.get("sigla_provincia") or "").strip().upper()
+    return f"- {nome} ({citta} - {prov})"
 
 
 # ---------------------------------------------------------
@@ -134,71 +184,74 @@ def filtra_tornei(tornei):
 # ---------------------------------------------------------
 
 def main():
-    global tornei_precedenti
+    print("Avvio monitor tornei FITP (versione ibrida, memoria cumulativa)...")
 
-    print("Avvio monitor tornei FITP (API mode)...")
-
-    # Carica memoria persistente
+    # Memoria cumulativa: tutti i tornei mai visti
     memoria = carica_memoria()
+    print(f"Memoria iniziale (tornei mai visti): {len(memoria)}")
+
+    # Stato precedente: fotografia filtrata dell'ultimo ciclo
+    stato_precedente = carica_stato_precedente()
+    print(f"Stato precedente (fotografia filtrata): {len(stato_precedente)}")
 
     while True:
         try:
             print("\nScarico tornei...")
             tornei = scarica_tornei()
 
-            print(f"Tornei totali ricevuti: {len(tornei)}")
-
             validi = filtra_tornei(tornei)
 
-            # --- SIMULAZIONE SINGOLA ---
-            if not tornei_precedenti and not memoria:
-                validi.append({
-                    "nome_torneo": "TEST TORNEO SIMULATO",
-                    "citta": "Milano",
-                    "sigla_provincia": "MI",
-                    "tipo_torneo": "Test",
-                    "id_settore": 0,
-                    "id_fonte": 0
-                })
-                print(">>> TORNEO SIMULATO AGGIUNTO PER TEST <<<")
-
-            # Stampa forense
-            print("\n--- TORNEI VALIDI DOPO FILTRO ---")
+            # Deduplica per chiave nella fotografia corrente
+            foto_corrente = set()
+            mappa_corrente = {}  # chiave -> torneo
             for t in validi:
-                print(
-                    t.get("nome_torneo"),
-                    "| tipo:", t.get("tipo_torneo"),
-                    "| settore:", t.get("id_settore"),
-                    "| fonte:", t.get("id_fonte"),
-                )
-            print("------------------------------\n")
+                k = chiave_torneo(t)
+                foto_corrente.add(k)
+                mappa_corrente[k] = t
 
-            # --- MEMORIA PERSISTENTE ---
-            # Aggiunge solo i nuovi tornei mai visti
-            nuovi = 0
-            for t in validi:
-                chiave = (t["nome_torneo"], t["citta"], t["sigla_provincia"])
-                if chiave not in memoria:
-                    memoria.append(chiave)
-                    nuovi += 1
+            print(f"Fotografia corrente (chiavi uniche): {len(foto_corrente)}")
 
-            if nuovi > 0:
-                print(f"📌 Aggiunti {nuovi} nuovi tornei alla memoria persistente.")
+            # Aggiorna memoria cumulativa: aggiungi tutte le chiavi viste
+            nuovi_in_memoria = foto_corrente - memoria
+            if nuovi_in_memoria:
+                print(f"📌 Aggiunti {len(nuovi_in_memoria)} tornei nuovi alla memoria cumulativa.")
+                memoria |= nuovi_in_memoria
                 salva_memoria(memoria)
+            else:
+                print("Nessun nuovo torneo da aggiungere alla memoria cumulativa.")
 
-            # --- CONFRONTO FORENSE ---
-            if memoria != tornei_precedenti:
-                print("⚠️ Modifiche rilevate, invio notifica...")
+            # Confronto fotografia corrente vs precedente
+            if foto_corrente != stato_precedente:
+                print("⚠️ Variazione rilevata nella fotografia filtrata, invio notifica...")
 
-                msg = "🎾 *Aggiornamento tornei Milano (10 gen → 31 mar, no TPRA):*\n\n"
-                for nome, citta, prov in memoria:
-                    msg += f"- {nome} ({citta} - {prov})\n"
+                # Costruisci messaggio con TUTTA la memoria cumulativa
+                msg_lines = []
+                msg_lines.append("🎾 *Elenco cumulativo tornei Milano (10 gen → 31 mar, no TPRA):*")
+                msg_lines.append("")
 
+                # Per la notifica usiamo la memoria cumulativa,
+                # ma per ogni chiave proviamo a usare i dati più recenti se disponibili
+                for k in sorted(memoria):
+                    t = mappa_corrente.get(k)
+                    if t is None:
+                        # torneo non presente nella fotografia corrente (es. rimosso dal sito)
+                        # costruiamo un finto record minimale dalla chiave
+                        nome, citta, prov = k.split("|")
+                        t = {
+                            "nome_torneo": nome,
+                            "citta": citta,
+                            "sigla_provincia": prov
+                        }
+                    msg_lines.append(format_linea(t))
+
+                msg = "\n".join(msg_lines)
                 invia_telegram(msg)
 
-                tornei_precedenti = memoria.copy()
+                # Aggiorna stato precedente
+                stato_precedente = foto_corrente
+                salva_stato_precedente(stato_precedente)
             else:
-                print("Nessuna modifica rispetto all'ultimo controllo.")
+                print("Nessuna variazione nella fotografia filtrata. Nessuna notifica inviata.")
 
         except Exception as e:
             print(f"Errore generale: {e}")
