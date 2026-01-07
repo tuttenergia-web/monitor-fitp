@@ -1,4 +1,4 @@
-print(">>> STO ESEGUENDO monitor_tornei_fitp.py <<<")
+print(">>> STO ESEGUENDO monitor_tornei_fitp_copia.py <<<")
 
 import os
 print("FILE IN ESECUZIONE:", os.path.abspath(__file__))
@@ -9,15 +9,15 @@ import requests
 # CONFIGURAZIONE
 # ---------------------------------------------------------
 
-API_PROD = "https://dp-fit-prod-function.azurewebsites.net/api/v3/puc/search/competitions/list"
-API_TEST = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc/list"
+API_URL = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc/list"
 
 CHAT_ID = "6701954823"
 BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 
-PROVINCIA = "MI"
-INTERVALLO = 30  # secondi
+PROVINCIA = "MI"     # filtro provincia
+INTERVALLO = 30      # secondi tra un controllo e l'altro
 
+# Stato precedente per rilevare modifiche
 tornei_precedenti = []
 
 
@@ -38,11 +38,11 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# PAYLOAD STANDARD FITP
+# CHIAMATA API FITP
 # ---------------------------------------------------------
 
-def payload_standard():
-    return {
+def scarica_tornei():
+    payload = {
         "guid": "",
         "profilazione": "",
         "freetext": None,
@@ -66,76 +66,46 @@ def payload_standard():
         "tipo_competizione": None
     }
 
-
-# ---------------------------------------------------------
-# CHIAMATE API (prod + test)
-# ---------------------------------------------------------
-
-def scarica(api_url):
-    try:
-        r = requests.post(api_url, json=payload_standard(), timeout=10)
-        r.raise_for_status()
-        data = r.json()
-
-        # API TEST usa "competizioni"
-        if "competizioni" in data:
-            return data["competizioni"]
-
-        # API PROD usa "data" o "competitions"
-        if "data" in data:
-            return data["data"]
-
-        if "competitions" in data:
-            return data["competitions"]
-
-        print("⚠️ Formato risposta inatteso da:", api_url)
-        return []
-
-    except Exception as e:
-        print(f"Errore API {api_url}: {e}")
-        return []
-
-
-def scarica_unificato():
-    print("→ Chiamo API TEST…")
-    t1 = scarica(API_TEST)
-
-    print("→ Chiamo API PROD…")
-    t2 = scarica(API_PROD)
-
-    # Merge + deduplica per nome_torneo
-    unione = {}
-    for t in t1 + t2:
-        nome = t.get("nome_torneo", "").strip()
-        if nome:
-            unione[nome] = t
-
-    print(f"Totale unificato dopo merge: {len(unione)}")
-    return list(unione.values())
+    r = requests.post(API_URL, json=payload)
+    r.raise_for_status()
+    return r.json()["competizioni"]
 
 
 # ---------------------------------------------------------
-# FILTRO TORNEI
+# FILTRI
 # ---------------------------------------------------------
 
-def filtra(tornei):
+def filtra_tornei(tornei):
     validi = []
 
     for t in tornei:
-        nome = t.get("nome_torneo", "")
-        prov = (t.get("sigla_provincia") or "").upper().strip()
 
-        # Filtro LOMB
-        if not nome.upper().startswith("LOMB"):
+        nome_torneo = t["nome_torneo"]
+        provincia = (t.get("sigla_provincia") or "").strip().upper()
+
+        # DEBUG: stampa tutto ciò che arriva dall’API
+        print("NOME:", repr(nome_torneo), "PROV:", provincia)
+
+        # 1) Filtro LOMB robusto
+        if not nome_torneo.upper().startswith("LOMB"):
             continue
 
-        # Filtro provincia MI
-        if prov != PROVINCIA:
+        print("PASSA LOMB:", nome_torneo)
+
+        # 2) Filtro provincia MI
+        if provincia != "MI":
+            print("SCARTO (non MI):", nome_torneo)
             continue
 
+        print("PASSA MI:", nome_torneo)
+
+        # Aggiungi ai validi
         validi.append(t)
+        print("AGGIUNTO:", nome_torneo)
 
-    print(f"→ Tornei validi dopo filtro: {len(validi)}")
+    # Stampa finale
+    print(">>> NUMERO TORNEI VALIDATI:", len(validi))
+
     return validi
 
 
@@ -146,39 +116,64 @@ def filtra(tornei):
 def main():
     global tornei_precedenti
 
-    print("Avvio monitor tornei FITP (modalità doppio endpoint)…")
+    print("Avvio monitor tornei FITP (API mode)...")
 
     while True:
         try:
-            print("\nScarico tornei…")
-            tornei = scarica_unificato()
+            print("\nScarico tornei...")
+            tornei = scarica_tornei()
 
-            print(f"Tornei totali ricevuti (unificati): {len(tornei)}")
+            print(f"Tornei totali ricevuti: {len(tornei)}")
 
-            validi = filtra(tornei)
+            validi = filtra_tornei(tornei)
 
-            # Snapshot per confronto
+            # --- SIMULAZIONE SINGOLA ---
+            # Aggiunge un torneo fasullo SOLO al primo ciclo dopo il deploy
+            if not tornei_precedenti:
+                validi.append({
+                    "nome_torneo": "TEST TORNEO SIMULATO",
+                    "citta": "Milano",
+                    "sigla_provincia": "MI",
+                    "tipo_torneo": "Test",
+                    "id_settore": 0,
+                    "id_fonte": 0
+                })
+                print(">>> TORNEO SIMULATO AGGIUNTO PER TEST <<<")
+
+            # Stampa forense
+            print("\n--- TORNEI VALIDI DOPO FILTRO ---")
+            for t in validi:
+                print(
+                    t.get("nome_torneo"),
+                    "| tipo:", t.get("tipo_torneo"),
+                    "| settore:", t.get("id_settore"),
+                    "| fonte:", t.get("id_fonte"),
+                )
+            print("------------------------------\n")
+
+            # --- CONFRONTO FORENSE ---
             snapshot = [
-                (t["nome_torneo"], t.get("citta"), t.get("sigla_provincia"))
+                (t["nome_torneo"], t["citta"], t["sigla_provincia"])
                 for t in validi
             ]
 
             if snapshot != tornei_precedenti:
-                print("⚠️ Modifiche rilevate → invio notifica")
+                print("⚠️ Modifiche rilevate, invio notifica...")
 
-                msg = "🎾 Aggiornamento tornei Milano (10 gen → 31 mar):\n\n"
+                msg = "🎾 *Aggiornamento tornei Milano (10 gen → 31 mar, no TPRA):*\n\n"
                 for t in validi:
-                    msg += f"- {t['nome_torneo']} ({t.get('citta')} - {t.get('sigla_provincia')})\n"
+                    msg += f"- {t['nome_torneo']} ({t['citta']} - {t['sigla_provincia']})\n"
 
                 invia_telegram(msg)
+
                 tornei_precedenti = snapshot.copy()
             else:
-                print("Nessuna modifica.")
+                print("Nessuna modifica rispetto all'ultimo controllo.")
 
         except Exception as e:
-            print("Errore generale:", e)
+            print(f"Errore generale: {e}")
 
-        print(f"Attendo {INTERVALLO} secondi…")
+        print(f"Attendo {INTERVALLO} secondi...")
         time.sleep(INTERVALLO)
 
 
