@@ -1,4 +1,4 @@
-print(">>> STO ESEGUENDO monitor_tornei_fitp_copia.py <<<")
+print(">>> STO ESEGUENDO monitor_tornei_fitp_paginato.py <<<")
 
 import os
 print("FILE IN ESECUZIONE:", os.path.abspath(__file__))
@@ -21,9 +21,6 @@ INTERVALLO = 30
 # File di memoria persistente
 MEMORIA_FILE = "tornei_memoria.json"
 
-# Stato precedente per rilevare modifiche
-tornei_precedenti = []
-
 
 # ---------------------------------------------------------
 # MEMORIA PERSISTENTE
@@ -31,19 +28,22 @@ tornei_precedenti = []
 
 def carica_memoria():
     if not os.path.exists(MEMORIA_FILE):
-        return []
+        return set()
 
     try:
         with open(MEMORIA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
+            data = json.load(f)
+        # data è una lista di chiavi
+        return set(data)
+    except Exception as e:
+        print("Errore lettura memoria:", e)
+        return set()
 
 
-def salva_memoria(memoria):
+def salva_memoria(memoria_set):
     try:
         with open(MEMORIA_FILE, "w", encoding="utf-8") as f:
-            json.dump(memoria, f, ensure_ascii=False, indent=2)
+            json.dump(list(memoria_set), f, ensure_ascii=False, indent=2)
     except Exception as e:
         print("Errore salvataggio memoria:", e)
 
@@ -55,8 +55,12 @@ def salva_memoria(memoria):
 def invia_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": msg}
-        r = requests.post(url, json=payload)
+        payload = {
+            "chat_id": CHAT_ID,
+            "text": msg,
+            "parse_mode": "Markdown"
+        }
+        r = requests.post(url, json=payload, timeout=20)
         print(f"Telegram status: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
@@ -65,37 +69,55 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# CHIAMATA API FITP
+# CHIAMATA API FITP - PAGINAZIONE COMPLETA
 # ---------------------------------------------------------
 
-def scarica_tornei():
-    payload = {
-        "guid": "",
-        "profilazione": "",
-        "freetext": None,
-        "id_regione": None,
-        "id_provincia": None,
-        "id_stato": None,
-        "ambito": None,
-        "categoria_eta": None,
-        "classifica": None,
-        "data_fine": "31/03/2026",
-        "data_inizio": "10/01/2026",
-        "fetchrows": 500,
-        "id_area_regionale": None,
-        "id_classifica": None,
-        "id_disciplina": 4332,
-        "massimale_montepremi": None,
-        "rowstoskip": 0,
-        "sesso": None,
-        "sortcolumn": "data_inizio",
-        "sortorder": "asc",
-        "tipo_competizione": None
-    }
+def scarica_tutti_i_tornei():
+    tutti = []
+    rowstoskip = 0
+    fetchrows = 200  # batch più piccoli, ma completi
 
-    r = requests.post(API_URL, json=payload)
-    r.raise_for_status()
-    return r.json()["competizioni"]
+    while True:
+        payload = {
+            "guid": "",
+            "profilazione": "",
+            "freetext": None,
+            "id_regione": None,
+            "id_provincia": None,
+            "id_stato": None,
+            "ambito": None,
+            "categoria_eta": None,
+            "classifica": None,
+            "data_fine": "31/03/2026",
+            "data_inizio": "10/01/2026",
+            "fetchrows": fetchrows,
+            "id_area_regionale": None,
+            "id_classifica": None,
+            "id_disciplina": 4332,
+            "massimale_montepremi": None,
+            "rowstoskip": rowstoskip,
+            "sesso": None,
+            "sortcolumn": "data_inizio",
+            "sortorder": "asc",
+            "tipo_competizione": None
+        }
+
+        print(f"Chiamata API: rowstoskip={rowstoskip}, fetchrows={fetchrows}")
+        r = requests.post(API_URL, json=payload, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+
+        competizioni = data.get("competizioni", [])
+        print(f"Batch ricevuto: {len(competizioni)} tornei")
+
+        if not competizioni:
+            break
+
+        tutti.extend(competizioni)
+        rowstoskip += len(competizioni)
+
+    print(f"Tornei totali ricevuti (tutti i batch): {len(tutti)}")
+    return tutti
 
 
 # ---------------------------------------------------------
@@ -106,17 +128,19 @@ def filtra_tornei(tornei):
     validi = []
 
     for t in tornei:
-        nome_torneo = t["nome_torneo"]
+        nome_torneo = t.get("nome_torneo", "")
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
         print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
+        # Solo tornei LOMB.
         if not nome_torneo.upper().startswith("LOMB"):
             continue
 
         print("PASSA LOMB:", nome_torneo)
 
-        if provincia != "MI":
+        # Solo provincia MI
+        if provincia != PROVINCIA:
             print("SCARTO (non MI):", nome_torneo)
             continue
 
@@ -130,75 +154,85 @@ def filtra_tornei(tornei):
 
 
 # ---------------------------------------------------------
+# CHIAVE STABILE PER MEMORIA
+# ---------------------------------------------------------
+
+def chiave_torneo(t):
+    """
+    Chiave stabile per identificare un torneo.
+    Usiamo combinazione di nome + città + provincia.
+    Se in futuro troviamo un ID univoco nel JSON, lo sostituiamo qui.
+    """
+    nome = (t.get("nome_torneo") or "").strip()
+    citta = (t.get("citta") or "").strip()
+    prov = (t.get("sigla_provincia") or "").strip().upper()
+    return f"{nome}|{citta}|{prov}"
+
+
+def format_linea_torneo(t):
+    nome = (t.get("nome_torneo") or "").strip()
+    citta = (t.get("citta") or "").strip()
+    prov = (t.get("sigla_provincia") or "").strip().upper()
+    return f"- {nome} ({citta} - {prov})"
+
+
+# ---------------------------------------------------------
 # LOOP PRINCIPALE
 # ---------------------------------------------------------
 
 def main():
-    global tornei_precedenti
+    print("Avvio monitor tornei FITP (API paginata + memoria per ID)...")
 
-    print("Avvio monitor tornei FITP (API mode)...")
-
-    # Carica memoria persistente
-    memoria = carica_memoria()
+    memoria_ids = carica_memoria()
+    print(f"Memoria iniziale: {len(memoria_ids)} tornei")
 
     while True:
         try:
-            print("\nScarico tornei...")
-            tornei = scarica_tornei()
-
-            print(f"Tornei totali ricevuti: {len(tornei)}")
+            print("\nScarico TUTTI i tornei (paginazione completa)...")
+            tornei = scarica_tutti_i_tornei()
 
             validi = filtra_tornei(tornei)
 
-            # --- SIMULAZIONE SINGOLA ---
-            if not tornei_precedenti and not memoria:
-                validi.append({
+            # --- SIMULAZIONE SINGOLA (solo se memoria vuota) ---
+            if not memoria_ids:
+                torneo_test = {
                     "nome_torneo": "TEST TORNEO SIMULATO",
                     "citta": "Milano",
                     "sigla_provincia": "MI",
-                    "tipo_torneo": "Test",
-                    "id_settore": 0,
-                    "id_fonte": 0
-                })
+                }
+                validi.append(torneo_test)
                 print(">>> TORNEO SIMULATO AGGIUNTO PER TEST <<<")
 
-            # Stampa forense
-            print("\n--- TORNEI VALIDI DOPO FILTRO ---")
-            for t in validi:
-                print(
-                    t.get("nome_torneo"),
-                    "| tipo:", t.get("tipo_torneo"),
-                    "| settore:", t.get("id_settore"),
-                    "| fonte:", t.get("id_fonte"),
-                )
-            print("------------------------------\n")
+            # Calcola ID correnti
+            current_ids = {chiave_torneo(t) for t in validi}
 
-            # --- MEMORIA PERSISTENTE ---
-            # Aggiunge solo i nuovi tornei mai visti
-            nuovi = 0
-            for t in validi:
-                chiave = (t["nome_torneo"], t["citta"], t["sigla_provincia"])
-                if chiave not in memoria:
-                    memoria.append(chiave)
-                    nuovi += 1
+            # Trova i NUOVI tornei mai visti prima
+            nuovi_ids = current_ids - memoria_ids
 
-            if nuovi > 0:
-                print(f"📌 Aggiunti {nuovi} nuovi tornei alla memoria persistente.")
-                salva_memoria(memoria)
+            if not nuovi_ids:
+                print("Nessun torneo nuovo rispetto alla memoria.")
+                # Aggiorniamo comunque la memoria con lo stato corrente
+                memoria_ids = current_ids
+                salva_memoria(memoria_ids)
+            else:
+                print(f"📌 Trovati {len(nuovi_ids)} tornei nuovi.")
 
-            # --- CONFRONTO FORENSE ---
-            if memoria != tornei_precedenti:
-                print("⚠️ Modifiche rilevate, invio notifica...")
+                nuovi_tornei = [t for t in validi if chiave_torneo(t) in nuovi_ids]
 
-                msg = "🎾 *Aggiornamento tornei Milano (10 gen → 31 mar, no TPRA):*\n\n"
-                for nome, citta, prov in memoria:
-                    msg += f"- {nome} ({citta} - {prov})\n"
+                # Costruisci messaggio SOLO con i nuovi tornei
+                msg_lines = []
+                msg_lines.append("🎾 *Aggiornamento tornei Milano (10 gen → 31 mar, no TPRA):*")
+                msg_lines.append("")
+                for t in nuovi_tornei:
+                    msg_lines.append(format_linea_torneo(t))
+
+                msg = "\n".join(msg_lines)
 
                 invia_telegram(msg)
 
-                tornei_precedenti = memoria.copy()
-            else:
-                print("Nessuna modifica rispetto all'ultimo controllo.")
+                # Aggiorna memoria
+                memoria_ids = current_ids
+                salva_memoria(memoria_ids)
 
         except Exception as e:
             print(f"Errore generale: {e}")
