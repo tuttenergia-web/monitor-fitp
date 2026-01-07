@@ -86,9 +86,16 @@ def filtra_tornei(tornei):
         # DEBUG: stampa tutto ciò che arriva dall’API
         print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
+        # 🔍 PATCH FORENSE PER LOMB. 36 — verifica se arriva dal JSON
+        if "LOMB. 36" in nome_torneo:
+            print("DEBUG: LOMB. 36 trovato nel JSON grezzo", flush=True)
+
         # 1) Filtro LOMB robusto
         if not nome_torneo.upper().startswith("LOMB"):
             continue
+
+        if "LOMB. 36" in nome_torneo:
+            print("DEBUG: LOMB. 36 passa filtro LOMB", flush=True)
 
         print("PASSA LOMB:", nome_torneo)
 
@@ -97,17 +104,22 @@ def filtra_tornei(tornei):
             print("SCARTO (non MI):", nome_torneo)
             continue
 
+        if "LOMB. 36" in nome_torneo:
+            print("DEBUG: LOMB. 36 passa filtro provincia MI", flush=True)
+
         print("PASSA MI:", nome_torneo)
 
         # Aggiungi ai validi
         validi.append(t)
         print("AGGIUNTO:", nome_torneo)
 
+        if "LOMB. 36" in nome_torneo:
+            print("DEBUG: LOMB. 36 aggiunto ai validi", flush=True)
+
     # Stampa finale
     print(">>> NUMERO TORNEI VALIDATI:", len(validi))
 
     return validi
-
 
 # ---------------------------------------------------------
 # LOOP PRINCIPALE
