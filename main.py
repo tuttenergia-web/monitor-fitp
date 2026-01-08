@@ -186,7 +186,8 @@ def main():
     print("Avvio monitor tornei FITP (versione ibrida, memoria cumulativa)...")
 
     # Memoria cumulativa: tutti i tornei mai visti
-    memoria = carica_memoria()
+#    memoria = carica_memoria()
+    memoria = set()
     print(f"Memoria iniziale (tornei mai visti): {len(memoria)}")
 
     # Stato precedente: fotografia filtrata dell'ultimo ciclo (opzionale)
