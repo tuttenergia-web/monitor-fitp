@@ -18,8 +18,8 @@ BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 PROVINCIA = "MI"
 INTERVALLO = 30  # secondi tra un ciclo e l'altro
 
-MEMORIA_FILE = "tornei_memoria.json"  # memoria cumulativa
-STATO_FILE = "tornei_stato_precedente.json"  # fotografia filtrata precedente
+MEMORIA_FILE = "tornei_memoria.json"          # memoria cumulativa (chiavi già viste)
+STATO_FILE = "tornei_stato_precedente.json"   # opzionale: fotografia filtrata precedente
 
 
 # ---------------------------------------------------------
@@ -47,7 +47,7 @@ def salva_memoria(memoria_set):
 
 
 # ---------------------------------------------------------
-# STATO PRECEDENTE (FOTOGRAFIA FILTRATA)
+# STATO PRECEDENTE (FOTOGRAFIA FILTRATA) - opzionale
 # ---------------------------------------------------------
 
 def carica_stato_precedente():
@@ -164,7 +164,6 @@ def chiave_torneo(t):
     """
     Chiave stabile per identificare un torneo.
     Per ora: nome + citta + provincia.
-    Se in futuro troviamo un ID univoco nel JSON, lo sostituiamo qui.
     """
     nome = (t.get("nome_torneo") or "").strip()
     citta = (t.get("citta") or "").strip()
@@ -190,7 +189,7 @@ def main():
     memoria = carica_memoria()
     print(f"Memoria iniziale (tornei mai visti): {len(memoria)}")
 
-    # Stato precedente: fotografia filtrata dell'ultimo ciclo
+    # Stato precedente: fotografia filtrata dell'ultimo ciclo (opzionale)
     stato_precedente = carica_stato_precedente()
     print(f"Stato precedente (fotografia filtrata): {len(stato_precedente)}")
 
@@ -211,31 +210,24 @@ def main():
 
             print(f"Fotografia corrente (chiavi uniche): {len(foto_corrente)}")
 
-            # Aggiorna memoria cumulativa: aggiungi tutte le chiavi viste
+            # Calcola i tornei veramente nuovi rispetto alla memoria cumulativa
             nuovi_in_memoria = foto_corrente - memoria
+
             if nuovi_in_memoria:
-                print(f"📌 Aggiunti {len(nuovi_in_memoria)} tornei nuovi alla memoria cumulativa.")
+                print(f"📌 Trovati {len(nuovi_in_memoria)} tornei nuovi rispetto alla memoria cumulativa.")
+
+                # Aggiorna memoria cumulativa
                 memoria |= nuovi_in_memoria
                 salva_memoria(memoria)
-            else:
-                print("Nessun nuovo torneo da aggiungere alla memoria cumulativa.")
 
-            # Confronto fotografia corrente vs precedente
-            if foto_corrente != stato_precedente:
-                print("⚠️ Variazione rilevata nella fotografia filtrata, invio notifica...")
-
-                # Costruisci messaggio con TUTTA la memoria cumulativa
+                # Costruisci messaggio SOLO con i nuovi tornei
                 msg_lines = []
-                msg_lines.append("🎾 *Elenco cumulativo tornei Milano (10 gen → 31 mar, no TPRA):*")
+                msg_lines.append("🎾 *Nuovi tornei Milano (10 gen → 31 mar, no TPRA):*")
                 msg_lines.append("")
 
-                # Per la notifica usiamo la memoria cumulativa,
-                # ma per ogni chiave proviamo a usare i dati più recenti se disponibili
-                for k in sorted(memoria):
+                for k in sorted(nuovi_in_memoria):
                     t = mappa_corrente.get(k)
                     if t is None:
-                        # torneo non presente nella fotografia corrente (es. rimosso dal sito)
-                        # costruiamo un finto record minimale dalla chiave
                         nome, citta, prov = k.split("|")
                         t = {
                             "nome_torneo": nome,
@@ -247,11 +239,12 @@ def main():
                 msg = "\n".join(msg_lines)
                 invia_telegram(msg)
 
-                # Aggiorna stato precedente
-                stato_precedente = foto_corrente
-                salva_stato_precedente(stato_precedente)
             else:
-                print("Nessuna variazione nella fotografia filtrata. Nessuna notifica inviata.")
+                print("Nessun torneo nuovo rispetto alla memoria cumulativa. Nessuna notifica inviata.")
+
+            # Se vuoi continuare a tracciare la fotografia filtrata, la aggiorniamo comunque
+            stato_precedente = foto_corrente
+            salva_stato_precedente(stato_precedente)
 
         except Exception as e:
             print(f"Errore generale: {e}")
