@@ -16,7 +16,7 @@ CHAT_ID = "6701954823"
 BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
 
 PROVINCIA = "MI"
-INTERVALLO = 30  # secondi tra un ciclo e l'altro
+INTERVALLO = 1  # secondi tra un ciclo e l'altro
 
 MEMORIA_FILE = "tornei_memoria.json"          # memoria cumulativa (chiavi già viste)
 STATO_FILE = "tornei_stato_precedente.json"   # opzionale: fotografia filtrata precedente
