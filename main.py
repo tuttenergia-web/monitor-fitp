@@ -13,7 +13,7 @@ import requests
 API_URL = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc/list"
 
 CHAT_ID = "6701954823"
-BOT_TOKEN = "8567606681:AAECtRXD-ws0LP8kaIsgAQc9BEAjB2VewHU"
+BOT_TOKEN = "8046086242:AAFh_cpClHweB4KlX43xb1dtg2WTfg5dpyk"
 
 PROVINCIA = "MI"
 INTERVALLO = 1  # secondi tra un ciclo e l'altro
@@ -223,7 +223,7 @@ def main():
 
                 # Costruisci messaggio SOLO con i nuovi tornei
                 msg_lines = []
-                msg_lines.append("🎾 *Nuovi tornei Milano (10 gen → 31 mar, no TPRA):*")
+                msg_lines.append("🎾 *Nuovi tornei Milano (10 gen → 31 dic, no TPRA):*")
                 msg_lines.append("")
 
                 for k in sorted(nuovi_in_memoria):
