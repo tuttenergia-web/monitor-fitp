@@ -94,6 +94,40 @@ def invia_telegram(msg):
 # PAGINAZIONE: SCARICA TUTTI I TORNEI (500 PER PAGINA)
 # ---------------------------------------------------------
 
+<<<<<<< HEAD
+def scarica_tornei():
+    payload = {
+        "guid": "",
+        "profilazione": "",
+        "freetext": None,
+        "id_regione": None,
+        "id_provincia": None,
+        "id_stato": None,
+        "ambito": None,
+        "categoria_eta": None,
+        "classifica": None,
+        "data_fine": "31/03/2026",
+        "data_inizio": "10/01/2026",
+        "fetchrows": 1000,
+        "id_area_regionale": None,
+        "id_classifica": None,
+        "id_disciplina": 4332,
+        "massimale_montepremi": None,
+        "rowstoskip": 0,
+        "sesso": None,
+        "sortcolumn": "data_inizio",
+        "sortorder": "asc",
+        "tipo_competizione": None
+    }
+
+    print("Chiamata API unica (fetchrows=1000)...")
+    r = requests.post(API_URL, json=payload, timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    competizioni = data.get("competizioni", [])
+    print(f"Tornei totali ricevuti: {len(competizioni)}")
+    return competizioni
+=======
 def scarica_tutti_i_tornei():
     tutti = []
     rowstoskip = 0
@@ -140,6 +174,7 @@ def scarica_tutti_i_tornei():
 
     print(f"Totale tornei scaricati: {len(tutti)}")
     return tutti
+>>>>>>> 3824474bd4cc052a1ed364bc007774a540a0725e
 
 
 # ---------------------------------------------------------
