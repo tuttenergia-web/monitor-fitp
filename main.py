@@ -91,10 +91,9 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# PAGINAZIONE: SCARICA TUTTI I TORNEI (500 PER PAGINA)
+# CHIAMATA API (UNICA, fetchrows=1000)
 # ---------------------------------------------------------
 
-<<<<<<< HEAD
 def scarica_tornei():
     payload = {
         "guid": "",
@@ -127,54 +126,6 @@ def scarica_tornei():
     competizioni = data.get("competizioni", [])
     print(f"Tornei totali ricevuti: {len(competizioni)}")
     return competizioni
-=======
-def scarica_tutti_i_tornei():
-    tutti = []
-    rowstoskip = 0
-    fetchrows = 500
-
-    while True:
-        payload = {
-            "guid": "",
-            "profilazione": "",
-            "freetext": None,
-            "id_regione": None,
-            "id_provincia": None,
-            "id_stato": None,
-            "ambito": None,
-            "categoria_eta": None,
-            "classifica": None,
-            "data_fine": "31/03/2026",
-            "data_inizio": "10/01/2026",
-            "fetchrows": fetchrows,
-            "id_area_regionale": None,
-            "id_classifica": None,
-            "id_disciplina": 4332,
-            "massimale_montepremi": None,
-            "rowstoskip": rowstoskip,
-            "sesso": None,
-            "sortcolumn": "data_inizio",
-            "sortorder": "asc",
-            "tipo_competizione": None
-        }
-
-        print(f"Scarico pagina: rowstoskip={rowstoskip}, fetchrows={fetchrows}")
-        r = requests.post(API_URL, json=payload, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        competizioni = data.get("competizioni", [])
-
-        print(f"  → ricevuti {len(competizioni)} tornei")
-
-        if not competizioni:
-            break
-
-        tutti.extend(competizioni)
-        rowstoskip += fetchrows
-
-    print(f"Totale tornei scaricati: {len(tutti)}")
-    return tutti
->>>>>>> 3824474bd4cc052a1ed364bc007774a540a0725e
 
 
 # ---------------------------------------------------------
@@ -236,7 +187,7 @@ def main():
     while True:
         try:
             print("\nScarico tornei...")
-            tornei = scarica_tutti_i_tornei()
+            tornei = scarica_tornei()
 
             validi = filtra_tornei(tornei)
 
