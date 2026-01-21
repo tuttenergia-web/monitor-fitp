@@ -91,41 +91,55 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# CHIAMATA API (UNA SOLA)
+# PAGINAZIONE: SCARICA TUTTI I TORNEI (500 PER PAGINA)
 # ---------------------------------------------------------
 
-def scarica_tornei():
-    payload = {
-        "guid": "",
-        "profilazione": "",
-        "freetext": None,
-        "id_regione": None,
-        "id_provincia": None,
-        "id_stato": None,
-        "ambito": None,
-        "categoria_eta": None,
-        "classifica": None,
-        "data_fine": "31/03/2026",
-        "data_inizio": "10/01/2026",
-        "fetchrows": 500,
-        "id_area_regionale": None,
-        "id_classifica": None,
-        "id_disciplina": 4332,
-        "massimale_montepremi": None,
-        "rowstoskip": 0,
-        "sesso": None,
-        "sortcolumn": "data_inizio",
-        "sortorder": "asc",
-        "tipo_competizione": None
-    }
+def scarica_tutti_i_tornei():
+    tutti = []
+    rowstoskip = 0
+    fetchrows = 500
 
-    print("Chiamata API unica (fetchrows=500)...")
-    r = requests.post(API_URL, json=payload, timeout=20)
-    r.raise_for_status()
-    data = r.json()
-    competizioni = data.get("competizioni", [])
-    print(f"Tornei totali ricevuti: {len(competizioni)}")
-    return competizioni
+    while True:
+        payload = {
+            "guid": "",
+            "profilazione": "",
+            "freetext": None,
+            "id_regione": None,
+            "id_provincia": None,
+            "id_stato": None,
+            "ambito": None,
+            "categoria_eta": None,
+            "classifica": None,
+            "data_fine": "31/03/2026",
+            "data_inizio": "10/01/2026",
+            "fetchrows": fetchrows,
+            "id_area_regionale": None,
+            "id_classifica": None,
+            "id_disciplina": 4332,
+            "massimale_montepremi": None,
+            "rowstoskip": rowstoskip,
+            "sesso": None,
+            "sortcolumn": "data_inizio",
+            "sortorder": "asc",
+            "tipo_competizione": None
+        }
+
+        print(f"Scarico pagina: rowstoskip={rowstoskip}, fetchrows={fetchrows}")
+        r = requests.post(API_URL, json=payload, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        competizioni = data.get("competizioni", [])
+
+        print(f"  → ricevuti {len(competizioni)} tornei")
+
+        if not competizioni:
+            break
+
+        tutti.extend(competizioni)
+        rowstoskip += fetchrows
+
+    print(f"Totale tornei scaricati: {len(tutti)}")
+    return tutti
 
 
 # ---------------------------------------------------------
@@ -139,14 +153,11 @@ def filtra_tornei(tornei):
         nome_torneo = t.get("nome_torneo", "")
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
-        # Debug forense
         print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
-        # Solo tornei LOMB.
         if not nome_torneo.upper().startswith("LOMB"):
             continue
 
-        # Solo provincia MI
         if provincia != PROVINCIA:
             continue
 
@@ -157,14 +168,10 @@ def filtra_tornei(tornei):
 
 
 # ---------------------------------------------------------
-# CHIAVE STABILE (PER ORA COMPOSITA)
+# CHIAVE STABILE
 # ---------------------------------------------------------
 
 def chiave_torneo(t):
-    """
-    Chiave stabile per identificare un torneo.
-    Per ora: nome + citta + provincia.
-    """
     nome = (t.get("nome_torneo") or "").strip()
     citta = (t.get("citta") or "").strip()
     prov = (t.get("sigla_provincia") or "").strip().upper()
@@ -185,25 +192,21 @@ def format_linea(t):
 def main():
     print("Avvio monitor tornei FITP (versione ibrida, memoria cumulativa)...")
 
-    # Memoria cumulativa: tutti i tornei mai visti
-#    memoria = carica_memoria()
     memoria = set()
     print(f"Memoria iniziale (tornei mai visti): {len(memoria)}")
 
-    # Stato precedente: fotografia filtrata dell'ultimo ciclo (opzionale)
     stato_precedente = carica_stato_precedente()
     print(f"Stato precedente (fotografia filtrata): {len(stato_precedente)}")
 
     while True:
         try:
             print("\nScarico tornei...")
-            tornei = scarica_tornei()
+            tornei = scarica_tutti_i_tornei()
 
             validi = filtra_tornei(tornei)
 
-            # Deduplica per chiave nella fotografia corrente
             foto_corrente = set()
-            mappa_corrente = {}  # chiave -> torneo
+            mappa_corrente = {}
             for t in validi:
                 k = chiave_torneo(t)
                 foto_corrente.add(k)
@@ -211,17 +214,14 @@ def main():
 
             print(f"Fotografia corrente (chiavi uniche): {len(foto_corrente)}")
 
-            # Calcola i tornei veramente nuovi rispetto alla memoria cumulativa
             nuovi_in_memoria = foto_corrente - memoria
 
             if nuovi_in_memoria:
                 print(f"📌 Trovati {len(nuovi_in_memoria)} tornei nuovi rispetto alla memoria cumulativa.")
 
-                # Aggiorna memoria cumulativa
                 memoria |= nuovi_in_memoria
                 salva_memoria(memoria)
 
-                # Costruisci messaggio SOLO con i nuovi tornei
                 msg_lines = []
                 msg_lines.append("🎾 *Nuovi tornei Milano (10 gen → 31 dic, no TPRA):*")
                 msg_lines.append("")
@@ -243,7 +243,6 @@ def main():
             else:
                 print("Nessun torneo nuovo rispetto alla memoria cumulativa. Nessuna notifica inviata.")
 
-            # Se vuoi continuare a tracciare la fotografia filtrata, la aggiorniamo comunque
             stato_precedente = foto_corrente
             salva_stato_precedente(stato_precedente)
 
