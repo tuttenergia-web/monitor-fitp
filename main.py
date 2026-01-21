@@ -135,6 +135,9 @@ def scarica_tornei():
     data = r.json()
     competizioni = data.get("competizioni", [])
     print(f"Tornei totali ricevuti: {len(competizioni)}")
+    print("\n" + "="*80)
+    print(f" CICLO COMPLETATO — Tornei ricevuti: {len(competizioni)} — fetchrows=1300 ")
+    print("="*80 + "\n")
     print(f"===== CICLO COMPLETATO — Tornei ricevuti: {len(competizioni)} =====")
     return competizioni
 
