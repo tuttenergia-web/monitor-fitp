@@ -5,6 +5,7 @@ print("FILE IN ESECUZIONE:", os.path.abspath(__file__))
 import time
 import json
 import requests
+from datetime import datetime, timedelta
 
 # ---------------------------------------------------------
 # CONFIGURAZIONE
@@ -19,11 +20,11 @@ PROVINCIA = "MI"
 INTERVALLO = 1  # secondi tra un ciclo e l'altro
 
 MEMORIA_FILE = "tornei_memoria.json"          # memoria cumulativa (chiavi già viste)
-STATO_FILE = "tornei_stato_precedente.json"   # opzionale: fotografia filtrata precedente
+STATO_FILE = "tornei_stato_precedente.json"   # fotografia filtrata precedente
 
 
 # ---------------------------------------------------------
-# MEMORIA CUMULATIVA (SET DI CHIAVI)
+# MEMORIA CUMULATIVA
 # ---------------------------------------------------------
 
 def carica_memoria():
@@ -47,7 +48,7 @@ def salva_memoria(memoria_set):
 
 
 # ---------------------------------------------------------
-# STATO PRECEDENTE (FOTOGRAFIA FILTRATA) - opzionale
+# STATO PRECEDENTE
 # ---------------------------------------------------------
 
 def carica_stato_precedente():
@@ -91,10 +92,19 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# CHIAMATA API (UNICA, fetchrows=1000)
+# CHIAMATA API (UNICA, fetchrows=1300, finestra dinamica)
 # ---------------------------------------------------------
 
 def scarica_tornei():
+
+    oggi = datetime.now()
+    data_inizio_dinamica = (oggi + timedelta(days=7)).strftime("%d/%m/%Y")
+
+    anno_corrente = oggi.year
+    data_fine_dinamica = f"31/12/{anno_corrente}"
+
+    print(f"Finestra dinamica: da {data_inizio_dinamica} a {data_fine_dinamica}")
+
     payload = {
         "guid": "",
         "profilazione": "",
@@ -105,9 +115,9 @@ def scarica_tornei():
         "ambito": None,
         "categoria_eta": None,
         "classifica": None,
-        "data_fine": "31/03/2026",
-        "data_inizio": "10/01/2026",
-        "fetchrows": 1000,
+        "data_fine": data_fine_dinamica,
+        "data_inizio": data_inizio_dinamica,
+        "fetchrows": 1300,
         "id_area_regionale": None,
         "id_classifica": None,
         "id_disciplina": 4332,
@@ -119,7 +129,7 @@ def scarica_tornei():
         "tipo_competizione": None
     }
 
-    print("Chiamata API unica (fetchrows=1000)...")
+    print("Chiamata API unica (fetchrows=1300)...")
     r = requests.post(API_URL, json=payload, timeout=20)
     r.raise_for_status()
     data = r.json()
@@ -209,7 +219,7 @@ def main():
                 salva_memoria(memoria)
 
                 msg_lines = []
-                msg_lines.append("🎾 *Nuovi tornei Milano (10 gen → 31 dic, no TPRA):*")
+                msg_lines.append("🎾 *Nuovi tornei Milano (finestra dinamica):*")
                 msg_lines.append("")
 
                 for k in sorted(nuovi_in_memoria):
