@@ -135,10 +135,7 @@ def scarica_tornei():
     data = r.json()
     competizioni = data.get("competizioni", [])
     print(f"Tornei totali ricevuti: {len(competizioni)}")
-    print("\n" + "="*80)
-    print(f" CICLO COMPLETATO — Tornei ricevuti: {len(competizioni)} — fetchrows=1300 ")
-    print("="*80 + "\n")
-    print(f"===== CICLO COMPLETATO — Tornei ricevuti: {len(competizioni)} =====")
+
     return competizioni
 
 
@@ -153,7 +150,8 @@ def filtra_tornei(tornei):
         nome_torneo = t.get("nome_torneo", "")
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
-        print("NOME:", repr(nome_torneo), "PROV:", provincia)
+        # RIMOSSO: print dei 1300 tornei
+        # print("NOME:", repr(nome_torneo), "PROV:", provincia)
 
         if not nome_torneo.upper().startswith("LOMB"):
             continue
@@ -205,6 +203,11 @@ def main():
 
             validi = filtra_tornei(tornei)
 
+            # LOG DEI TORNEI VALIDATI
+            print("Tornei validati in questo ciclo:")
+            for t in validi:
+                print(" -", format_linea(t))
+
             foto_corrente = set()
             mappa_corrente = {}
             for t in validi:
@@ -246,8 +249,14 @@ def main():
             stato_precedente = foto_corrente
             salva_stato_precedente(stato_precedente)
 
+            # BANNER DI DEMARCAZIONE
+            print("\n" + "="*60)
+            print(f" CICLO COMPLETATO — Tornei ricevuti: {len(tornei)} — Validati: {len(validi)} ")
+            print("="*60 + "\n")
+
         except Exception as e:
             print(f"Errore generale: {e}")
+            invia_telegram(f"⚠️ Errore nel monitor FITP:\n{e}")
 
         print(f"Attendo {INTERVALLO} secondi...")
         time.sleep(INTERVALLO)
