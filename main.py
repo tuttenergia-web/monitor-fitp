@@ -22,6 +22,12 @@ INTERVALLO = 1  # secondi tra un ciclo e l'altro
 MEMORIA_FILE = "tornei_memoria.json"          # memoria cumulativa (chiavi già viste)
 STATO_FILE = "tornei_stato_precedente.json"   # fotografia filtrata precedente
 
+# ---------------------------------------------------------
+# TRACKING ERRORI (per notifica condizionata)
+# ---------------------------------------------------------
+
+errori_recenti = []  # lista di datetime degli errori avvenuti
+
 
 # ---------------------------------------------------------
 # MEMORIA CUMULATIVA
@@ -150,9 +156,6 @@ def filtra_tornei(tornei):
         nome_torneo = t.get("nome_torneo", "")
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
-        # RIMOSSO: print dei 1300 tornei
-        # print("NOME:", repr(nome_torneo), "PROV:", provincia)
-
         if not nome_torneo.upper().startswith("LOMB"):
             continue
 
@@ -196,6 +199,8 @@ def main():
     stato_precedente = carica_stato_precedente()
     print(f"Stato precedente (fotografia filtrata): {len(stato_precedente)}")
 
+    global errori_recenti
+
     while True:
         try:
             print("\nScarico tornei...")
@@ -203,7 +208,6 @@ def main():
 
             validi = filtra_tornei(tornei)
 
-            # LOG DEI TORNEI VALIDATI
             print("Tornei validati in questo ciclo:")
             for t in validi:
                 print(" -", format_linea(t))
@@ -249,14 +253,24 @@ def main():
             stato_precedente = foto_corrente
             salva_stato_precedente(stato_precedente)
 
-            # BANNER DI DEMARCAZIONE
             print("\n" + "="*60)
             print(f" CICLO COMPLETATO — Tornei ricevuti: {len(tornei)} — Validati: {len(validi)} ")
             print("="*60 + "\n")
 
         except Exception as e:
             print(f"Errore generale: {e}")
-            invia_telegram(f"⚠️ Errore nel monitor FITP:\n{e}")
+
+            # --- LOGICA "2 ERRORI NELLO STESSO MINUTO" ---
+            ora = datetime.now()
+            errori_recenti.append(ora)
+
+            # Mantieni solo errori negli ultimi 60 secondi
+            errori_recenti = [t for t in errori_recenti if ora - t <= timedelta(seconds=60)]
+
+            if len(errori_recenti) >= 2:
+                invia_telegram(f"⚠️ Errore nel monitor FITP (2 errori nello stesso minuto):\n{e}")
+            else:
+                print("Errore silenziato (solo 1 errore nel minuto).")
 
         print(f"Attendo {INTERVALLO} secondi...")
         time.sleep(INTERVALLO)
