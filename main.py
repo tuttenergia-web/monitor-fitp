@@ -183,7 +183,21 @@ def format_linea(t):
     nome = (t.get("nome_torneo") or "").strip()
     citta = (t.get("citta") or "").strip()
     prov = (t.get("sigla_provincia") or "").strip().upper()
-    return f"- {nome} ({citta} - {prov})"
+
+    data_inizio = (t.get("data_inizio") or "").strip()
+    data_fine = (t.get("data_fine") or "").strip()
+
+    # Se mancano le date, evita di mostrare " → "
+    if data_inizio and data_fine:
+        date_str = f"{data_inizio} → {data_fine}"
+    else:
+        date_str = ""
+
+    # Usa date_str nella riga finale
+    if date_str:
+        return f"- {nome} ({citta} - {prov}) — {date_str}"
+    else:
+        return f"- {nome} ({citta} - {prov})"
 
 
 # ---------------------------------------------------------
