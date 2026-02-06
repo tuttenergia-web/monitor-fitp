@@ -153,10 +153,14 @@ def filtra_tornei(tornei):
     validi = []
 
     for t in tornei:
-        nome_torneo = t.get("nome_torneo", "")
+        nome_torneo = (t.get("nome_torneo") or "").strip().upper()
         provincia = (t.get("sigla_provincia") or "").strip().upper()
 
-        if not nome_torneo.upper().startswith("LOMB"):
+        # --- NUOVA LOGICA DI SELEZIONE ---
+        if not (
+            nome_torneo.startswith("LOMB")
+            or nome_torneo.startswith("CIRCUITO REGIONALE LOMBARDO")
+        ):
             continue
 
         if provincia != PROVINCIA:
