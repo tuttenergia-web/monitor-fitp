@@ -98,7 +98,7 @@ def invia_telegram(msg):
 
 
 # ---------------------------------------------------------
-# CHIAMATA API (UNICA, fetchrows=1300, finestra dinamica)
+# CHIAMATA API (UNICA, fetchrows=1400, finestra dinamica)
 # ---------------------------------------------------------
 
 def scarica_tornei():
@@ -123,7 +123,7 @@ def scarica_tornei():
         "classifica": None,
         "data_fine": data_fine_dinamica,
         "data_inizio": data_inizio_dinamica,
-        "fetchrows": 1300,
+        "fetchrows": 1400,
         "id_area_regionale": None,
         "id_classifica": None,
         "id_disciplina": 4332,
@@ -135,7 +135,7 @@ def scarica_tornei():
         "tipo_competizione": None
     }
 
-    print("Chiamata API unica (fetchrows=1300)...")
+    print("Chiamata API unica (fetchrows=1400)...")
     r = requests.post(API_URL, json=payload, timeout=20)
     r.raise_for_status()
     data = r.json()
