@@ -23,7 +23,7 @@ MEMORIA_FILE = "tornei_memoria.json"          # memoria cumulativa (chiavi già 
 STATO_FILE = "tornei_stato_precedente.json"   # fotografia filtrata precedente
 
 # ---------------------------------------------------------
-# TRACKING ERRORI (per notifica condizionata)
+# TRACKING ERRORI (per notificazione condizionata)
 # ---------------------------------------------------------
 
 errori_recenti = []  # lista di datetime degli errori avvenuti
