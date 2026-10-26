@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 
 API_URL = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc/list"
 
-CHAT_ID = "6701954823"
-BOT_TOKEN = "8046086242:AAHn2gGSJlN3RAotIwGBbqEjbncvX9CLE-E"
+CHAT_ID = "8526952303"
+BOT_TOKEN = "8526952303:AAEhm6qBxy48ClZNKrLWbU28-qzHOyBCTB0"
 
 PROVINCIA = "MI"
 INTERVALLO = 30  # secondi tra un ciclo e l'altro
