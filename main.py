@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 API_URL = "https://dp-myfit-test-function-v2.azurewebsites.net/api/v2/tornei/puc/list"
 
-CHAT_ID = "8526952303"
+CHAT_ID = "6701954823"
 BOT_TOKEN = "8526952303:AAEhm6qBxy48ClZNKrLWbU28-qzHOyBCTB0"
 
 PROVINCIA = "MI"
